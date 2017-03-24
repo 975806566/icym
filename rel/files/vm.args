@@ -1,0 +1,31 @@
+## Name of the node
+-name im_server@192.168.199.133
+
+## Cookie for distributed erlang
+
+-setcookie def_cookie
+
+## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
+## (Disabled by default..use with caution!)
+##-heart
+-smp true
+
+## Enable kernel poll and a few async threads
++K true
++A 64
+
+## max process numbers
++P 1000000
+
++zdbbl 1024
+
+-zerts_de_busy_limit 1024
+
+## Increase number of concurrent ports/sockets
+-env ERL_MAX_PORTS 409600
+
+-env ERTS_MAX_PORTS 409600
+
+-mnesia dump_log_write_threshold 10000000 
+-mnesia dump_log_time_threshold 10000000 
+-mnesia dc_dump_limit 64
