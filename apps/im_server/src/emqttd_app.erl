@@ -37,20 +37,18 @@
     State     :: term(),
     Reason    :: term().
 start(_StartType, _StartArgs) ->
-    {ok, Cluster} = application:get_env(cluster),
-    schema_db:mnesia_init(Cluster),
-    mnesia:change_table_copy_type( schema, node(), disc_copies ),
+
     print_banner(),
     {ok, Sup} = emqttd_sup:start_link(),
     start_servers(Sup),
     {ok, Listeners} = application:get_env(listen),
     emqttd:open(Listeners),
     register(emqttd, self()),
-    checkout_node(),
     print_vsn(),
-    reloader:start(),
-    recompiler:start(),
+%    reloader:start(),
+%    recompiler:start(),
     {ok, Sup}.
+
 
 print_banner() ->
     ?PRINT("starting emqttd on node '~s'~n", [node()]).
@@ -60,20 +58,8 @@ print_vsn() ->
     {ok, Desc} = application:get_key(description),
     ?PRINT("~s ~s is running now~n", [Desc, Vsn]).
 
-checkout_node() ->
-    case mnesia_tools:get_node_id() of
-        [] ->
-            mnesia_tools:dirty_write(nodes, #nodes{id = mnesia_tools:get_next_node_id(), node = node()});
-        _ -> ok
-    end.
-
 start_servers(Sup) ->
-%    {ok, EredisOpts} = application:get_env(eredis),
-    {ok, Cluster}    = application:get_env(cluster),
-    % {ok, Length}     = application:get_env(off_msg_length),
-    {ok, Apn}        = application:get_env(apn_server),
-    {ok, Node}       = application:get_env(log_server),
-    {ok, Ham}        = application:get_env(ham_server),
+
     {ok, NoLoginRate } = application:get_env( mem_no_login_rate ),
     {ok, NoServerRate} = application:get_env( mem_no_server_rate ),
     lists:foreach(
@@ -93,15 +79,9 @@ start_servers(Sup) ->
         [{"emqttd client manager", emqttd_cm_sup},
          {"emqttd message manager", emqttd_mm_sup},
          {"emqttd pubsub", emqttd_pubsub},
-         {"emqttd monitor", monitor, {Cluster, []}},
-         % {"emqttd eredis", et_eredis, EredisOpts},
-         % {"emqttd collector", emqttd_collector, ServerOpts},
          {"mem_monitor", emqttd_mem_monitor, [ NoLoginRate, NoServerRate ]},
          {"emqttd http active messenger manager",emqttd_ham_sup},
-         {"emqttd puback manager",emqttd_am_sup},
-         % {"emqttd state subscribe manager",emqttd_ssm_sup},
-         {"cluster manager", cluster_manager, Cluster},
-         {"emqttd core ets",emqttd_core_ets, [Apn, Node, Ham]}
+         {"emqttd puback manager",emqttd_am_sup}
         ]),
         erlang:system_monitor(whereis(dets),[{large_heap,120000}]).
 

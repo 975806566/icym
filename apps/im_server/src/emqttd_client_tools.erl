@@ -35,15 +35,15 @@
 update_info( Username, PlatformType, IOSToken, Peername ) ->
     [User] = mnesia:dirty_read(users, Username),
     [UserInfo] = mnesia:dirty_read(user_info, User#users.user_id),
-    case UserInfo#user_info.status =:= 1 andalso  User#users.node_id =/= mnesia_tools:get_node_id() of
+    case UserInfo#user_info.status =:= 1 andalso  User#users.node_id =/= node() of
         true ->
             [Node] = mnesia:dirty_read(nodes, User#users.node_id),
             cast_svc:cast(Node#nodes.node, emqttd_client_tools, notify_duplicate, [Username, node(), self()]);
         false ->
             ok
     end,
+    mnesia_tools:dirty_write(users, User#users{node_id = node() }),
     Time = list_to_integer(emqttd_tools:get_unixtime()),
-    mnesia_tools:dirty_write(users, User#users{node_id = mnesia_tools:get_node_id()}),
     UserInfo3 = UserInfo#user_info{
         platform_type = PlatformType, 
         ios_token = IOSToken, 

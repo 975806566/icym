@@ -308,22 +308,17 @@ do_route_ham( UserInfo, FromUserName, Uid, Type, Content, Qos) ->
 check_user_online( User ) ->
     %-% 如果user上面登录的node与当前处理这条消息的node是同一个node。
     %-% 那么这个用户认为是不在线上，离线处理
-    case User#users.node_id =:= mnesia_tools:get_node_id() of
+    Node = User#users.node_id,
+    case Node =:= node() of
         true -> 
             false;
         false ->
             %-% 如果用户登录上的node不在了，那么这个用户被认为不在线上
-            case mnesia:dirty_read(nodes, User#users.node_id) of
-                [] -> 
+            case ets:lookup(kv, { im, Node }) of
+                [] ->
                     false;
-                [Node] ->
-                    {_N, _Id, NodeAtom} = Node,
-                    case ets:lookup(kv, { im, NodeAtom }) of
-                        [] ->
-                            false;
-                        _Found ->
-                            Node
-                    end
+                _Found ->
+                    Node
             end
     end.
     
