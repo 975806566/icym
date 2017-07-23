@@ -45,8 +45,8 @@ start(_StartType, _StartArgs) ->
     emqttd:open(Listeners),
     register(emqttd, self()),
     print_vsn(),
-%    reloader:start(),
-%    recompiler:start(),
+    reloader:start(),
+    recompiler:start(),
     {ok, Sup}.
 
 

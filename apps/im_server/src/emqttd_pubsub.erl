@@ -80,59 +80,31 @@ subscribe([{TopicId, Qos}|Topics], UserId, Acc) ->
     SubQos = do_check_topic_sum( UserId, TopicId, Qos ),
     subscribe(Topics, UserId, [SubQos|Acc]).
 
-
-do_get_topic_len( TopicList ) ->
-    Fun = fun( Topic, AccCount) ->
-        case Topic of
-            <<"p@",_Resb/binary>> ->
-                AccCount + 1;
-            _NotSame ->
-                AccCount
-        end
-    end,
-    lists:foldl( Fun, 0, TopicList).
-
-% ------------------------------------------------------------------------------
-% 判断用户订阅的主题数是否已经达到上限
-% 1: 如果已经达到上限： 那么返回 ?USB_ACK_FAIL
-% 2: 如果没有达到上限： 返回成功订阅的 QOS
-% ------------------------------------------------------------------------------
 -spec do_check_topic_sum( UserId::binary(), TopicId::binary(), Qos::integer() ) -> true | false.
 do_check_topic_sum( UserId, TopicId, Qos ) ->
     case mnesia:dirty_read( user_info, UserId ) of
         [] ->
             ?SUB_ACK_FAIL;
-        [ UserInfo ] ->
-            ExtraMap = UserInfo#user_info.apply_time,
-            CurTopicCount = 
-            case is_map( ExtraMap ) of
-                true ->
-                    maps:get( group_count, ExtraMap, 0 );
-                _NotMap ->
-                    Len = do_get_topic_len( mnesia_tools:dirty_index_read(topic_subscriber, UserId, #topic_subscriber.user_id) ),
-                    mnesia:dirty_write( user_info, UserInfo#user_info{apply_time = #{group_count => Len }} ),
-                    Len
-            end,
-
-            MaxTopicCount = util:get_value_cache( emqttd, max_topic_count, ?MAX_TOPIC_COUNT ),
-
-            case CurTopicCount >= MaxTopicCount of
-                true ->
-                    ?SUB_ACK_FAIL;
-                _NotBigger ->
-
-                    NewTopicCount =
-                    case mnesia:dirty_read( topic_subscriber, {TopicId, UserId} ) of
-                        [] ->
-                            CurTopicCount + 1;
-                        [_TR] ->
-                            CurTopicCount
-                    end,
-
-                    mnesia:dirty_write( user_info, UserInfo#user_info{apply_time = #{group_count => NewTopicCount }}),
-                    Subscriber = #topic_subscriber{id = {TopicId, UserId}, topic = TopicId, qos = Qos, user_id=UserId},
-                    mnesia:dirty_write( emqttd_topic:new(TopicId) ),
-                    mnesia:dirty_write(Subscriber),
+        [ _UserInfo ] ->
+            Subscriber = #topic_subscriber{id = {TopicId, UserId}, topic = TopicId, qos = Qos, user_id=UserId},
+            case mnesia:dirty_read( topic_subscriber, {TopicId,UserId}) of
+                [] ->
+                    mnesia:dirty_write( topic, emqttd_topic:new(TopicId) ),
+                    mnesia:dirty_write( topic_subscriber, Subscriber),
+                    try
+                        mysql_poolboy:with( mysql_pool2, 
+                                        fun (Pid) ->
+                                            ok = mysql:query(Pid, "insert into subscriber(topic,user_id,qos) values (?,?,?);", [TopicId, UserId, Qos ])
+                                        end
+                                  )
+                    catch
+                        M:R ->
+                        lager:error("subscribe error ~p ~p ~p ~n",[M,R,erlang:get_stacktrace()]),
+                        mnesia:dirty_delete( topic, TopicId ),
+                        mnesia:dirty_delete( topic_subscriber, {TopicId, UserId})
+                    end,             
+                    Qos;
+                _HaveTopic ->
                     Qos
             end
     end.
@@ -153,17 +125,19 @@ unsubscribe(Topics, UserId) ->
             case mnesia:dirty_read( user_info, UserId ) of
                 [] ->
                     ok;
-                [ UserInfo ] ->
+                [ _UserInfo ] ->
                     case lists:member(Topic, Topics) of
                         true -> 
                             mnesia_tools:delete_object(Sub),
-                            OldMap = UserInfo#user_info.apply_time,
-                            case is_map( OldMap  ) of
-                                true ->
-                                    CurTopicCount = maps:get( group_count, OldMap , 1),
-                                    mnesia:dirty_write( user_info, UserInfo#user_info{ apply_time = OldMap#{ group_count => CurTopicCount - 1}} );
-                                _NotChange ->
-                                    ok
+                            try
+                                mysql_poolboy:with( mysql_pool2, 
+                                        fun (Pid) ->
+                                            ok = mysql:query(Pid, "delete from subscriber where topic = ? and user_id = ?;", [Topic, UserId])
+                                        end
+                                  )
+                            catch
+                                M:R ->
+                                    lager:error("subscribe error ~p ~p ~p ~n",[M,R,erlang:get_stacktrace()])
                             end;
                         false -> ok
                     end
@@ -209,6 +183,7 @@ do_get_min_qos(Msg, SendQos, SubQos) ->
         end.
 
 route_to_groups( Topic, Gid, Msg = #mqtt_message{qos = SendQos, payload = Content}, FromUsername ) ->
+
 
     emqttd_client_tools:msg_info( FromUsername, Gid, Content, group ),
 

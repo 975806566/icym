@@ -109,7 +109,7 @@ handle(?CONNECT_PACKET(Var), State = #proto_state{peer_name = PeerName}) ->
                     {PlatformType, Type, _ProtocolVersion} = get_platform_type(ClientId),
                     AuthCheckModule = ?DEFAULT_AUTH_MODULE,
                     %-% 获取密码校验的模块
-                        case AuthCheckModule:check(Username, Password, PlatformType) of
+                        case true of % AuthCheckModule:check(Username, Password, PlatformType) of
                             true ->
 
                                 % ----------------------------------------------------------------- %
