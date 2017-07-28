@@ -371,7 +371,7 @@ do_route_to_uid(Qos, Content, Type, ToUid, FromUserName ) ->
                     % ------------------------------------------------------------------------
                     % 接收者位于 ham 平台，需要特殊处理
                     % ------------------------------------------------------------------------
-                    case UserInfo#user_info.platform_type =:= ?H_SDK of
+                    case UserInfo#user_info.id =:= <<"wx_system">> of
                         true  ->
                             do_route_ham( UserInfo, FromUserName, ToUid, Type, Content, Qos );
                         false ->

@@ -332,13 +332,8 @@ msg_info(FromUsername, Username, Payload, Type) ->
         0 ->
             ok;
         1 ->
-            case emqttd_core_ets:lookup_node(application:get_env(emqttd, log_server, undefined)) of
-                undefined ->
-                    %lager:error("Not find login_server node"),
-                    ok;
-                Node ->
-                    cast_svc:cast(Node, log_server_core, msg_info, [FromUsername, Username, Payload, Type])
-            end
+            Node = util:get_value_cache( emqttd, log_server, 'log_server@127.0.0.1'),
+            cast_svc:cast(Node, log_server_core, msg_info, [FromUsername, Username, Payload, Type])
     end.
 
 % ------------------------------------------------------------------------------------------------

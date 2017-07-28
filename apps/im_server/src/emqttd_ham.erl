@@ -44,6 +44,7 @@ send_sub_state(Appkey, FromUsername, Username, Type) ->
     gen_server:cast(Pid, {send_sub_state, Appkey, FromUsername, Username, Type}).
 
 to_msg_ham_list( FromUsername, ToUsernameList, _PacketId, MsgType, Payload ) ->
+    util:print( "toUserNameList: ~p", [ ToUsernameList ]),
     Type = case MsgType of
         1 -> chat;
         2 -> sfile
