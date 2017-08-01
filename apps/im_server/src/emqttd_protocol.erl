@@ -97,25 +97,25 @@ received(Packet = ?PACKET(_Type), State = #proto_state{peer_name = PeerName, cli
 
 handle(?CONNECT_PACKET(Var), State = #proto_state{peer_name = PeerName}) ->
     #mqtt_packet_connect{proto_ver   = ProtoVer,
-                         username    = Username,
-                         password    = Password,
+                         username    = _Username0,
+                         password    = _Password,
                          clean_sess  = CleanSess,
                          keep_alive  = KeepAlive,
                          client_id   = ClientId} = Var,
+    Username = ClientId,
     case util:get_value( mem_rate_can_login, true ) of
         true ->
             case validate_connect(Var, State) of
                 ?CONNACK_ACCEPT ->
-                    {PlatformType, Type, _ProtocolVersion} = get_platform_type(ClientId),
-                    AuthCheckModule = ?DEFAULT_AUTH_MODULE,
+                    % AuthCheckModule = ?DEFAULT_AUTH_MODULE,
                     %-% 获取密码校验的模块
                         case true of % AuthCheckModule:check(Username, Password, PlatformType) of
                             true ->
-
+                                Type = ?J_SDK,
                                 % ----------------------------------------------------------------- %
                                 % 注册唯一的 Uid 到emqttd_cm
                                 % ----------------------------------------------------------------- % 
-                                emqttd_cm:register(client(State#proto_state{client_id  = Username })),
+                                emqttd_cm:register(client(State#proto_state{client_id  = ClientId })),
 
                                 {ok, SessPid} = emqttd_session:start_link( CleanSess ),
                                 NewState = State#proto_state{proto_ver  = ProtoVer,
@@ -129,6 +129,9 @@ handle(?CONNECT_PACKET(Var), State = #proto_state{peer_name = PeerName}) ->
                                 Pid = emqttd_cm:lookup( Username ),
                                 case CleanSess of
                                     true ->
+                                        AWaitAckList = emqttd_am:load( ClientId ),
+                                        emqttd_client_tools:send_no_ack_msgs( ClientId, self(), AWaitAckList ),
+                                        off_msg_api:get_off_msg_event( node(), ClientId, 100000 ),
                                         ok;
                                     false ->
                                         emqttd_am:load( Username ),
